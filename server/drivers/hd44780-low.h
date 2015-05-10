@@ -57,6 +57,7 @@
 #define HD44780_CT_PIPLATE		23
 #define HD44780_CT_SPI			24
 #define HD44780_CT_PIFACECAD		25
+#define HD44780_CT_ODROID       36
 /**@}*/
 
 /** \name Symbolic names for interface types
@@ -160,6 +161,9 @@ typedef struct hd44780_private_data {
 #endif
 #ifdef WITH_RASPBERRYPI
 	struct rpi_gpio_map *rpi_gpio;	/**< GPIO pin mapping for Raspberry Pi */
+#endif
+#ifdef WITH_ODROID
+    struct odroid_gpio_map *odroid_gpio;  /**< GPIO pin mapping for ODroid*/
 #endif
 
 	int charmap;		/**< index of currently used charmap */

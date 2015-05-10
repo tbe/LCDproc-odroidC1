@@ -342,6 +342,9 @@
 /* Define if you're using NetBSD. */
 #undef NETBSD
 
+/* Define to 1 if your C compiler doesn't accept -c and -o together. */
+#undef NO_MINUS_C_MINUS_O
+
 /* Define if you're using OpenBSD. */
 #undef OPENBSD
 
@@ -424,6 +427,9 @@
 
 /* Define to 1 if you want to build hd44780 driver with ethlcd support */
 #undef WITH_ETHLCD
+
+/* Define if you are using a ODRoid-C1. */
+#undef WITH_ODROID
 
 /* Define if you are using a Raspberry Pi. */
 #undef WITH_RASPBERRYPI

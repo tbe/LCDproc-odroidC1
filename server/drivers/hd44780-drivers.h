@@ -44,6 +44,9 @@
 #ifdef WITH_RASPBERRYPI
 # include "hd44780-rpi.h"
 #endif
+#ifdef WITH_ODROID
+# include "hd44780-odroid.h"
+#endif
 /* add new connection type header files to the correct section above or here */
 
 
@@ -97,6 +100,9 @@ static const ConnectionMapping connectionMapping[] = {
 #endif
 #ifdef WITH_RASPBERRYPI
 	{ "raspberrypi",   HD44780_CT_RASPBERRYPI,   IF_TYPE_PARPORT,  hd_init_rpi      },
+#endif
+#ifdef WITH_ODROID
+    { "odroid",        HD44780_CT_ODROID,        IF_TYPE_PARPORT,  hd_init_odroid   },
 #endif
 	/* add new connection types in the correct section above or here */
 
