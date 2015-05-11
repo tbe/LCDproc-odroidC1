@@ -180,6 +180,10 @@ of connection (parallel port, serial port, USB, I2C, SPI or others).
         <entry><literal><link linkend="hd44780-raspberrypi">raspberrypi</link></literal></entry>
         <entry>LCD connected to the GPIO header of a Raspberry Pi</entry>
       </row>
+      <row>
+        <entry><literal><link linkend="hd44780-odroid">odroid</link></literal></entry>
+        <entry>16x2 LCD/IO shield of a odroid-C1</entry>
+      </row>
     </tbody>
   </tgroup>
   </table>
@@ -3047,6 +3051,76 @@ pin_D7=18
 pin_EN=8
 pin_RS=7
 pin_BL=17
+
+]]>
+</screen>
+</example>
+
+</sect4>
+</sect3>
+
+<sect3 id="hd44780-odroid">
+<title>odroid-C1</title>
+
+<para>This connection type supports the 16x2 LCD/IO shield on a ODroid-C1 GPIO header</para>
+
+<sect4 id="hd44780-odroid-config">
+<title>Special ODroid-C1 configuration options</title>
+
+<para>This connection driver can be configured to use other pins than the
+default. This may only be usefull if you use a custom LCD shield. 
+Using the <literal>pin_<replaceable>&lt;LCD pin name&gt;</replaceable></literal>
+configuration option, any LCD pin can be assigned to any GPIO pin.</para>
+
+<important>
+  <para>The values for the <literal>pin_<replaceable>&lt;LCD pin name&gt;
+  </replaceable></literal> configuration option are the pin number from the
+  header connector!</para> This is different from the Raspberry Pi driver.
+</important>
+
+<para>The connection driver contains a check for possible GPIO pins. You
+will receive an error message if you try to assign a pin to a signal that is
+not available.</para>
+
+<para>The LEDs on the LCD shield coult be controlled with the <lireral>output</literal>
+function. For more details, see <literal><link linkend="language-misc">the language
+documentation</link></literal></para>
+
+<para>The buttons are reported as direct attached keys. If both buttons are pressed,
+a third button will be emulated</param>
+
+<example id="hd44780-odroid-config.example">
+<title>HD44780: ODroid-C1 GPIO example with alternative pins</title>
+<screen>
+<![CDATA[
+[hd44780]
+ConnectionType=odroid
+Backlight=yes
+Size=16x2
+OutputPort=yes
+Keypad=yes
+
+# LCD connectors
+pin_EN=0
+pin_RS=7
+pin_D4=2
+pin_D5=3
+pin_D6=1
+pin_D7=4
+
+# LEDs
+pin_LED1=21
+pin_LED1=21
+pin_LED2=22
+pin_LED3=23
+pin_LED4=24
+pin_LED5=11
+pin_LED6=26
+pin_LED7=27
+
+# buttons
+pin_BTN1=5
+pin_BTN2=6
 
 ]]>
 </screen>

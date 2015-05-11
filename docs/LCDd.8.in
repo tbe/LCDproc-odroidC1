@@ -211,6 +211,9 @@ TCP connection using open source/open hardware ethlcd (http://manio.skyboo.net/e
 .TP
 .B raspberrypi
 LCD driven by the GPIO pins of a Raspberry Pi
+.TP
+.B odroid
+16x2 LCD/IO shield of a odroid-C1
 .RE
 .TP
 .B i2500vfd
