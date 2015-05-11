@@ -33,6 +33,17 @@
 #define ODROID_DEF_RS  7
 #define ODROID_DEF_EN  0
 
+#define ODROID_LED_1   21
+#define ODROID_LED_2   22
+#define ODROID_LED_3   23
+#define ODROID_LED_4   24
+#define ODROID_LED_5   11
+#define ODROID_LED_6   26
+#define ODROID_LED_7   27
+
+#define ODROID_BTN1    5
+#define ODROID_BTN2    6
+
 
 #include <stdio.h>
 #include <string.h>
@@ -46,9 +57,11 @@
 #include "hd44780-low.h"
 #include "report.h"
 
-void odroid_HD44780_senddata(PrivateData *p, unsigned char displayID, unsigned char flags, unsigned char ch);
-void odroid_HD44780_backlight(PrivateData *p, unsigned char state);
+void odroid_HD44780_senddata(PrivateData *p, unsigned char displayID, unsigned char flags,
+			     unsigned char ch);
 void odroid_HD44780_close(PrivateData *p);
+void odroid_HD44780_output(PrivateData *p, int data);
+unsigned char odroid_HD44780_readkeypad(PrivateData *p, unsigned int Ydata);
 
 /**
  * Pointer to the memory mapped GPIO registers. Note the pointer type is
@@ -66,77 +79,142 @@ static volatile unsigned int *gpio_map = NULL;
 #define GPIOX_PIN_END           118
 
 #define GPIOX_FSEL_REG_OFFSET   0x0C
-#define GPIOX_PUEN_REG_OFFSET   0x4C
 #define GPIOX_OUTP_REG_OFFSET   0x0D
+#define GPIOX_INP_REG_OFFSET    0x0E
+#define GPIOX_PUPD_REG_OFFSET   0x3E
+#define GPIOX_PUEN_REG_OFFSET   0x4C
 
 #define GPIOY_FSEL_REG_OFFSET   0x0F
-#define GPIOY_PUEN_REG_OFFSET   0x4B
 #define GPIOY_OUTP_REG_OFFSET   0x10
+#define GPIOY_INP_REG_OFFSET    0x11
+#define GPIOY_PUPD_REG_OFFSET   0x3D
+#define GPIOY_PUEN_REG_OFFSET   0x4B
 
-//
+// 
 // offset to the GPIO Set regsiter
-//
-static int  gpioToGPSETReg (int pin)
+// 
+static inline int
+gpioToGPSETReg(int pin)
 {
-    if(pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)  return  GPIOX_OUTP_REG_OFFSET;
-    if(pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)  return  GPIOY_OUTP_REG_OFFSET;
-    
-    return  -1;
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return GPIOX_OUTP_REG_OFFSET;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return GPIOY_OUTP_REG_OFFSET;
+
+	return -1;
 }
-   
-//
+
+// 
 // offset to the GPIO Pull up/down enable regsiter
-//
-static int  gpioToPUENReg (int pin)
+// 
+static inline int
+gpioToPUENReg(int pin)
 {
-    if(pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)  return  GPIOX_PUEN_REG_OFFSET;
-    if(pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)  return  GPIOY_PUEN_REG_OFFSET;
-    
-    return  -1;
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return GPIOX_PUEN_REG_OFFSET;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return GPIOY_PUEN_REG_OFFSET;
+
+	return -1;
 }
 
-//
+// 
 // offset to the GPIO bit
-//
-static int  gpioToShiftReg (int pin)
+// 
+static inline int
+gpioToShiftReg(int pin)
 {
-    if(pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)  return  pin - GPIOX_PIN_START;
-    if(pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)  return  pin - GPIOY_PIN_START;
-    
-    return  -1;
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return pin - GPIOX_PIN_START;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return pin - GPIOY_PIN_START;
+
+	return -1;
 }
 
-//
+// 
 // offset to the GPIO Function register
-//
-static int  gpioToGPFSELReg (int pin)
+// 
+static inline int
+gpioToGPFSELReg(int pin)
 {
-    if(pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)  return  GPIOX_FSEL_REG_OFFSET;
-    if(pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)  return  GPIOY_FSEL_REG_OFFSET;
-    
-    return  -1;
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return GPIOX_FSEL_REG_OFFSET;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return GPIOY_FSEL_REG_OFFSET;
+
+	return -1;
 }
 
-//
+// 
+// offset to the GPIO Input regsiter
+// 
+static inline int
+gpioToGPLEVReg(int pin)
+{
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return GPIOX_INP_REG_OFFSET;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return GPIOY_INP_REG_OFFSET;
+
+	return -1;
+}
+
+// 
+// offset to the GPIO Pull up/down regsiter
+// 
+static inline int
+gpioToPUPDReg(int pin)
+{
+	if (pin >= GPIOX_PIN_START && pin <= GPIOX_PIN_END)
+		return GPIOX_PUPD_REG_OFFSET;
+	if (pin >= GPIOY_PIN_START && pin <= GPIOY_PIN_END)
+		return GPIOY_PUPD_REG_OFFSET;
+
+	return -1;
+}
+
+// 
 // pinToGpio:
-//  Take a Wiring pin (0 through X) and re-map it to the ODROID_GPIO pin
-//
-static int pinToGpio [64] = {
-    88,  87, 116, 115, 104, 102, 103,  83, // 0..7
-    -1,  -1, 117, 118, 107, 106, 105,  -1, // 8..16
-    -1,  -1,  -1,  -1,  -1, 101, 100, 108, // 16..23
-    97,  -1,  99,  98,  -1,  -1,  -1,  -1, // 24..31
-    // Padding:
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,   // ... 47
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,   // ... 63
+// Take a Wiring pin (0 through X) and re-map it to the ODROID_GPIO pin
+// 
+static int pinToGpio[GPIO_PINS] = {
+	88, 87, 116, 115, 104, 102, 103, 83,	// 0..7
+	-1, -1, 117, 118, 107, 106, 105, -1,	// 8..16
+	-1, -1, -1, -1, -1, 101, 100, 108,	// 16..23
+	97, -1, 99, 98, -1, -1, -1, -1,	// 24..31
 };
 
 
-/** Setup a GPIO pin as input */
-#define INP_GPIO(g) *(gpio_map + gpioToGPFSELReg(pinToGpio[g])) = (*(gpio_map + gpioToGPFSELReg(pinToGpio[g])) |  (1 << gpioToShiftReg(pinToGpio[g])));
+/**
+ * Reads from a gpio pin.
+ * \param gpio_pin  GPIO port
+ * \returns         port value (0/1)
+ */
+static inline int
+read_gpio(int gpio_port)
+{
+	if ((*(gpio_map + gpioToGPLEVReg(gpio_port)) & (1 << gpioToShiftReg(gpio_port))) != 0)
+		return 1;
+	else
+		return 0;
+}
 
-/** Sets or clears a GPIO pin */
-#define SET_GPIO(g,a) if (a == 0) *(gpio_map + gpioToGPSETReg(pinToGpio[g])) &= ~(1 << gpioToShiftReg(pinToGpio[g])); else *(gpio_map + gpioToGPSETReg(pinToGpio[g])) |=  (1 << gpioToShiftReg(pinToGpio[g]));
+
+/**
+ * Writes to a gpio pin
+ * \param gpio_pin  GPIO port
+ * \param value     value to write (0/1)
+ */
+static inline void
+write_gpio(int gpio_port, int value)
+{
+	if (value == 0)
+		*(gpio_map + gpioToGPSETReg(gpio_port)) &= ~(1 << gpioToShiftReg(gpio_port));
+	else
+		*(gpio_map + gpioToGPSETReg(gpio_port)) |= (1 << gpioToShiftReg(gpio_port));
+}
+
 
 /**
  * Maps a memory region to the address space of the BM2835 GPIO controller.
@@ -160,10 +238,7 @@ setup_io(Driver *drvthis)
 
 	gpio_map = (unsigned int *) mmap(NULL,
 					 GPIO_BLOCK_SIZE,
-					 PROT_READ | PROT_WRITE,
-					 MAP_SHARED,
-					 mem_fd,
-					 GPIO_BASE);
+					 PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, GPIO_BASE);
 
 	if (gpio_map == MAP_FAILED) {
 		report(RPT_ERR, "setup_io: mmap failed: %s", strerror(errno));
@@ -192,6 +267,10 @@ check_pin(Driver *drvthis, int pin, int *used_pins)
 		report(RPT_ERR, "check_pin: GPIO pin %i out of range", pin);
 		return -1;
 	}
+	if (pinToGpio[pin] < 0) {
+		report(RPT_ERR, "check_pin: Use of GPIO pin %i not allowed", pin);
+		return -1;
+	}
 	if (used_pins[pin] == 1) {
 		report(RPT_ERR, "check_pin: GPIO pin %i already used", pin);
 		return -1;
@@ -203,24 +282,61 @@ check_pin(Driver *drvthis, int pin, int *used_pins)
 	return 0;
 }
 
+/**
+ * Setup a GPIO pin as input.
+ * \param gpio_port     GPIO port
+ */
+static inline void
+set_gpio_in(int gpio_port)
+{
+	*(gpio_map + gpioToGPFSELReg(gpio_port)) =
+		(*(gpio_map + gpioToGPFSELReg(gpio_port)) | (1 << gpioToShiftReg(gpio_port)));
+}
+
+/**
+ * Set the pull up/down mode of a input port.
+ * \param gpio_port  GPIO port
+ * \param mode pull up/down mode: -1 = no PUD, 0 = DOWN, 1 = UP
+ */
+static inline void
+set_gpio_pud(int gpio_port, int mode)
+{
+	if (mode < 0)
+		// disable PUD
+		*(gpio_map + gpioToPUENReg(gpio_port)) =
+			(*(gpio_map + gpioToPUENReg(gpio_port)) &
+			 ~(1 << gpioToShiftReg(gpio_port)));
+	else {
+		// enable PUD
+		*(gpio_map + gpioToPUENReg(gpio_port)) =
+			(*(gpio_map + gpioToPUENReg(gpio_port)) | (1 << gpioToShiftReg(gpio_port)));
+
+		if (mode > 0)
+			*(gpio_map + gpioToPUPDReg(gpio_port)) =
+				(*(gpio_map + gpioToPUPDReg(gpio_port)) |
+				 (1 << gpioToShiftReg(gpio_port)));
+		else
+			*(gpio_map + gpioToPUPDReg(gpio_port)) =
+				(*(gpio_map + gpioToPUPDReg(gpio_port)) &
+				 ~(1 << gpioToShiftReg(gpio_port)));
+
+	}
+}
 
 /**
  * Configures a GPIO pin: Disable pull-up/down and set it up as output.
  * \param drvthis  Pointer to driver structure.
- * \param gpio     Number of the GPIO pin to use.
+ * \param gpio_pin GPIO port
  */
-static void
-setup_gpio(Driver *drvthis, int gpio)
+static inline void
+set_gpio_out(Driver *drvthis, int gpio_port)
 {
 	volatile int i;
 
-    // map pin
-    gpio = pinToGpio[gpio];
-
 	/* Disable pull-up/down */
-    *(gpio_map + gpioToPUENReg(gpio)) = (*(gpio_map + gpioToPUENReg(gpio)) & ~(1 << gpioToShiftReg(gpio)));
+	set_gpio_pud(gpio_port, -1);
 
-	/*
+	/* 
 	 * After writing to the GPPUD register, need to wait 150 cycles as per
 	 * p101 BCM2835.pdf. The following while loop uses approx five
 	 * instructions plus another two to load the counter. Note: the int
@@ -229,12 +345,12 @@ setup_gpio(Driver *drvthis, int gpio)
 	i = 30;
 	while (--i);
 
-	/*
+	/* 
 	 * Now configure the pin as output
 	 */
-    *(gpio_map + gpioToGPFSELReg(gpio)) = (*(gpio_map + gpioToGPFSELReg(gpio)) & ~(1 << gpioToShiftReg(gpio)));
+	*(gpio_map + gpioToGPFSELReg(gpio_port)) =
+		(*(gpio_map + gpioToGPFSELReg(gpio_port)) & ~(1 << gpioToShiftReg(gpio_port)));
 }
-
 
 /**
  * Free resources used by this connection type.
@@ -244,20 +360,39 @@ void
 odroid_HD44780_close(PrivateData *p)
 {
 	/* Configure all pins as input */
-    INP_GPIO(p->odroid_gpio->en);
-    INP_GPIO(p->odroid_gpio->rs);
-    INP_GPIO(p->odroid_gpio->d7);
-    INP_GPIO(p->odroid_gpio->d6);
-    INP_GPIO(p->odroid_gpio->d5);
-    INP_GPIO(p->odroid_gpio->d4);
+	set_gpio_in(p->odroid_gpio->en);
+	set_gpio_in(p->odroid_gpio->rs);
+	set_gpio_in(p->odroid_gpio->d7);
+	set_gpio_in(p->odroid_gpio->d6);
+	set_gpio_in(p->odroid_gpio->d5);
+	set_gpio_in(p->odroid_gpio->d4);
+
+	if (p->have_output) {
+		set_gpio_in(p->odroid_gpio->led1);
+		set_gpio_in(p->odroid_gpio->led2);
+		set_gpio_in(p->odroid_gpio->led3);
+		set_gpio_in(p->odroid_gpio->led4);
+		set_gpio_in(p->odroid_gpio->led5);
+		set_gpio_in(p->odroid_gpio->led6);
+		set_gpio_in(p->odroid_gpio->led7);
+	}
+
+	/* disable PUD in Keypad ports */
+	if (p->have_keypad) {
+		set_gpio_pud(p->odroid_gpio->btn1, -1);
+		set_gpio_pud(p->odroid_gpio->btn2, -1);
+	}
 
 	/* Unmap and free memory */
 	if (gpio_map != NULL)
 		munmap((caddr_t) gpio_map, GPIO_BLOCK_SIZE);
-    if (p->odroid_gpio != NULL)
-        free(p->odroid_gpio);
-    p->odroid_gpio = NULL;
+	if (p->odroid_gpio != NULL)
+		free(p->odroid_gpio);
+	p->odroid_gpio = NULL;
 }
+
+// helper macro to remap pins to gpio-addresses after sanity checks
+#define TO_GPIO_ADDR(pin) p->odroid_gpio->pin = pinToGpio[p->odroid_gpio->pin]
 
 /**
  * Initialize the driver.
@@ -269,7 +404,7 @@ int
 hd_init_odroid(Driver *drvthis)
 {
 	PrivateData *p = (PrivateData *) drvthis->private_data;
-	int used_pins[GPIO_PINS] = {};
+	int used_pins[GPIO_PINS] = { };
 
 	/* Get GPIO configuration */
 	p->odroid_gpio = malloc(sizeof(struct odroid_gpio_map));
@@ -279,21 +414,14 @@ hd_init_odroid(Driver *drvthis)
 	}
 
 	p->odroid_gpio->en = drvthis->config_get_int(drvthis->name, "pin_EN", 0, ODROID_DEF_EN);
-    p->odroid_gpio->rs = drvthis->config_get_int(drvthis->name, "pin_RS", 0, ODROID_DEF_RS);
-    p->odroid_gpio->d7 = drvthis->config_get_int(drvthis->name, "pin_D7", 0, ODROID_DEF_D7);
-    p->odroid_gpio->d6 = drvthis->config_get_int(drvthis->name, "pin_D6", 0, ODROID_DEF_D6);
-    p->odroid_gpio->d5 = drvthis->config_get_int(drvthis->name, "pin_D5", 0, ODROID_DEF_D5);
-    p->odroid_gpio->d4 = drvthis->config_get_int(drvthis->name, "pin_D4", 0, ODROID_DEF_D4);
+	p->odroid_gpio->rs = drvthis->config_get_int(drvthis->name, "pin_RS", 0, ODROID_DEF_RS);
+	p->odroid_gpio->d7 = drvthis->config_get_int(drvthis->name, "pin_D7", 0, ODROID_DEF_D7);
+	p->odroid_gpio->d6 = drvthis->config_get_int(drvthis->name, "pin_D6", 0, ODROID_DEF_D6);
+	p->odroid_gpio->d5 = drvthis->config_get_int(drvthis->name, "pin_D5", 0, ODROID_DEF_D5);
+	p->odroid_gpio->d4 = drvthis->config_get_int(drvthis->name, "pin_D4", 0, ODROID_DEF_D4);
 
-    debug(RPT_INFO, "hd_init_odroid: Pin EN mapped to GPIO%d", p->odroid_gpio->en);
-    debug(RPT_INFO, "hd_init_odroid: Pin RS mapped to GPIO%d", p->odroid_gpio->rs);
-    debug(RPT_INFO, "hd_init_odroid: Pin D4 mapped to GPIO%d", p->odroid_gpio->d4);
-    debug(RPT_INFO, "hd_init_odroid: Pin D5 mapped to GPIO%d", p->odroid_gpio->d5);
-    debug(RPT_INFO, "hd_init_odroid: Pin D6 mapped to GPIO%d", p->odroid_gpio->d6);
-    debug(RPT_INFO, "hd_init_odroid: Pin D7 mapped to GPIO%d", p->odroid_gpio->d7);
-
-    if (check_pin(drvthis, p->odroid_gpio->en, used_pins) ||
-        check_pin(drvthis, p->odroid_gpio->rs, used_pins) ||
+	if (check_pin(drvthis, p->odroid_gpio->en, used_pins) ||
+	    check_pin(drvthis, p->odroid_gpio->rs, used_pins) ||
 	    check_pin(drvthis, p->odroid_gpio->d7, used_pins) ||
 	    check_pin(drvthis, p->odroid_gpio->d6, used_pins) ||
 	    check_pin(drvthis, p->odroid_gpio->d5, used_pins) ||
@@ -301,8 +429,85 @@ hd_init_odroid(Driver *drvthis)
 		free(p->odroid_gpio);
 		return -1;
 	}
+	// remap the pins to gpio addresses
+	TO_GPIO_ADDR(en);
+	TO_GPIO_ADDR(rs);
+	TO_GPIO_ADDR(d7);
+	TO_GPIO_ADDR(d6);
+	TO_GPIO_ADDR(d5);
+	TO_GPIO_ADDR(d4);
 
+	debug(RPT_INFO, "hd_init_odroid: Pin EN mapped to GPIO%d", p->odroid_gpio->en);
+	debug(RPT_INFO, "hd_init_odroid: Pin RS mapped to GPIO%d", p->odroid_gpio->rs);
+	debug(RPT_INFO, "hd_init_odroid: Pin D4 mapped to GPIO%d", p->odroid_gpio->d4);
+	debug(RPT_INFO, "hd_init_odroid: Pin D5 mapped to GPIO%d", p->odroid_gpio->d5);
+	debug(RPT_INFO, "hd_init_odroid: Pin D6 mapped to GPIO%d", p->odroid_gpio->d6);
+	debug(RPT_INFO, "hd_init_odroid: Pin D7 mapped to GPIO%d", p->odroid_gpio->d7);
 
+	if (p->have_output) {
+		p->odroid_gpio->led1 =
+			drvthis->config_get_int(drvthis->name, "pin_LED1", 0, ODROID_LED_1);
+		p->odroid_gpio->led2 =
+			drvthis->config_get_int(drvthis->name, "pin_LED2", 0, ODROID_LED_2);
+		p->odroid_gpio->led3 =
+			drvthis->config_get_int(drvthis->name, "pin_LED3", 0, ODROID_LED_3);
+		p->odroid_gpio->led4 =
+			drvthis->config_get_int(drvthis->name, "pin_LED4", 0, ODROID_LED_4);
+		p->odroid_gpio->led5 =
+			drvthis->config_get_int(drvthis->name, "pin_LED5", 0, ODROID_LED_5);
+		p->odroid_gpio->led6 =
+			drvthis->config_get_int(drvthis->name, "pin_LED6", 0, ODROID_LED_6);
+		p->odroid_gpio->led7 =
+			drvthis->config_get_int(drvthis->name, "pin_LED7", 0, ODROID_LED_7);
+
+		if (check_pin(drvthis, p->odroid_gpio->led1, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led2, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led3, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led4, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led5, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led6, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->led7, used_pins)) {
+			free(p->odroid_gpio);
+			return -1;
+		}
+		TO_GPIO_ADDR(led1);
+		TO_GPIO_ADDR(led2);
+		TO_GPIO_ADDR(led3);
+		TO_GPIO_ADDR(led4);
+		TO_GPIO_ADDR(led5);
+		TO_GPIO_ADDR(led6);
+		TO_GPIO_ADDR(led7);
+
+		debug(RPT_INFO, "hd_init_odroid: Pin LED1 mapped to GPIO%d", p->odroid_gpio->led1);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED2 mapped to GPIO%d", p->odroid_gpio->led2);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED3 mapped to GPIO%d", p->odroid_gpio->led3);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED4 mapped to GPIO%d", p->odroid_gpio->led4);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED5 mapped to GPIO%d", p->odroid_gpio->led5);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED6 mapped to GPIO%d", p->odroid_gpio->led6);
+		debug(RPT_INFO, "hd_init_odroid: Pin LED7 mapped to GPIO%d", p->odroid_gpio->led7);
+
+		p->hd44780_functions->output = odroid_HD44780_output;
+	}
+	if (p->have_keypad) {
+		p->odroid_gpio->btn1 =
+			drvthis->config_get_int(drvthis->name, "pin_BTN1", 0, ODROID_BTN1);
+		p->odroid_gpio->btn2 =
+			drvthis->config_get_int(drvthis->name, "pin_BTN2", 0, ODROID_BTN2);
+
+		if (check_pin(drvthis, p->odroid_gpio->btn1, used_pins) ||
+		    check_pin(drvthis, p->odroid_gpio->btn2, used_pins)) {
+			free(p->odroid_gpio);
+			return -1;
+		}
+		TO_GPIO_ADDR(btn1);
+		TO_GPIO_ADDR(btn2);
+
+		debug(RPT_INFO, "hd_init_odroid: Pin BTN1 mapped to GPIO%d", p->odroid_gpio->btn1);
+		debug(RPT_INFO, "hd_init_odroid: Pin BTN2 mapped to GPIO%d", p->odroid_gpio->btn2);
+
+		p->hd44780_functions->readkeypad = odroid_HD44780_readkeypad;
+
+	}
 	/* Now that configuration should be correct, set up the GPIO pins */
 	if (setup_io(drvthis) < 0) {
 		report(RPT_ERR, "hd_init_odroid: Failed to set up GPIO");
@@ -310,12 +515,30 @@ hd_init_odroid(Driver *drvthis)
 		return -1;
 	}
 
-	setup_gpio(drvthis, p->odroid_gpio->en);
-	setup_gpio(drvthis, p->odroid_gpio->rs);
-	setup_gpio(drvthis, p->odroid_gpio->d7);
-	setup_gpio(drvthis, p->odroid_gpio->d6);
-	setup_gpio(drvthis, p->odroid_gpio->d5);
-	setup_gpio(drvthis, p->odroid_gpio->d4);
+	set_gpio_out(drvthis, p->odroid_gpio->en);
+	set_gpio_out(drvthis, p->odroid_gpio->rs);
+	set_gpio_out(drvthis, p->odroid_gpio->d7);
+	set_gpio_out(drvthis, p->odroid_gpio->d6);
+	set_gpio_out(drvthis, p->odroid_gpio->d5);
+	set_gpio_out(drvthis, p->odroid_gpio->d4);
+
+	if (p->have_output) {
+		set_gpio_out(drvthis, p->odroid_gpio->led1);
+		set_gpio_out(drvthis, p->odroid_gpio->led2);
+		set_gpio_out(drvthis, p->odroid_gpio->led3);
+		set_gpio_out(drvthis, p->odroid_gpio->led4);
+		set_gpio_out(drvthis, p->odroid_gpio->led5);
+		set_gpio_out(drvthis, p->odroid_gpio->led6);
+		set_gpio_out(drvthis, p->odroid_gpio->led7);
+		p->hd44780_functions->output(p, 0);
+	}
+
+	if (p->have_keypad) {
+		set_gpio_in(p->odroid_gpio->btn1);
+		set_gpio_pud(p->odroid_gpio->btn1, 1);
+		set_gpio_in(p->odroid_gpio->btn2);
+		set_gpio_pud(p->odroid_gpio->btn2, 1);
+	}
 
 	p->hd44780_functions->senddata = odroid_HD44780_senddata;
 	p->hd44780_functions->close = odroid_HD44780_close;
@@ -325,7 +548,7 @@ hd_init_odroid(Driver *drvthis)
 	 * exactly what is required by HD44780. */
 	p->hd44780_functions->senddata(p, 0, RS_INSTR, 0x33);
 	p->hd44780_functions->uPause(p, 4100);
-	p->hd44780_functions->senddata(p, 0, RS_INSTR, 0x32 );
+	p->hd44780_functions->senddata(p, 0, RS_INSTR, 0x32);
 	p->hd44780_functions->uPause(p, 150);
 
 	common_init(p, IF_4BIT);
@@ -342,7 +565,8 @@ hd_init_odroid(Driver *drvthis)
  * \param ch         The value to send.
  */
 void
-odroid_HD44780_senddata(PrivateData *p, unsigned char displayID, unsigned char flags, unsigned char ch)
+odroid_HD44780_senddata(PrivateData *p, unsigned char displayID, unsigned char flags,
+			unsigned char ch)
 {
 	/* Safeguard: This should never happen */
 	if (gpio_map == NULL) {
@@ -350,63 +574,80 @@ odroid_HD44780_senddata(PrivateData *p, unsigned char displayID, unsigned char f
 	}
 
 	/* we don't support more then one desplay at this time */
-    if ( displayID > 1 )
-        return;
+	if (displayID > 1)
+		return;
 
 	if (flags == RS_INSTR) {
-		SET_GPIO(p->odroid_gpio->rs, 0);
+		write_gpio(p->odroid_gpio->rs, 0);
 	}
 	else {			/* flags == RS_DATA */
-		SET_GPIO(p->odroid_gpio->rs, 1);
+		write_gpio(p->odroid_gpio->rs, 1);
 	}
 	/* Clear data lines ready for nibbles */
-	SET_GPIO(p->odroid_gpio->d7, 0);
-	SET_GPIO(p->odroid_gpio->d6, 0);
-	SET_GPIO(p->odroid_gpio->d5, 0);
-	SET_GPIO(p->odroid_gpio->d4, 0);
+	write_gpio(p->odroid_gpio->d7, 0);
+	write_gpio(p->odroid_gpio->d6, 0);
+	write_gpio(p->odroid_gpio->d5, 0);
+	write_gpio(p->odroid_gpio->d4, 0);
 	p->hd44780_functions->uPause(p, 50);
 
 	/* Output upper nibble first */
-	SET_GPIO(p->odroid_gpio->d7, (ch & 0x80));
-	SET_GPIO(p->odroid_gpio->d6, (ch & 0x40));
-	SET_GPIO(p->odroid_gpio->d5, (ch & 0x20));
-	SET_GPIO(p->odroid_gpio->d4, (ch & 0x10));
+	write_gpio(p->odroid_gpio->d7, (ch & 0x80));
+	write_gpio(p->odroid_gpio->d6, (ch & 0x40));
+	write_gpio(p->odroid_gpio->d5, (ch & 0x20));
+	write_gpio(p->odroid_gpio->d4, (ch & 0x10));
 	p->hd44780_functions->uPause(p, 50);
 
 	/* Data is clocked on the falling edge of EN */
-    SET_GPIO(p->odroid_gpio->en, 1);
+	write_gpio(p->odroid_gpio->en, 1);
 	p->hd44780_functions->uPause(p, 50);
-	SET_GPIO(p->odroid_gpio->en, 0);
+	write_gpio(p->odroid_gpio->en, 0);
 	p->hd44780_functions->uPause(p, 50);
 
 	/* Do same for lower nibble */
-	SET_GPIO(p->odroid_gpio->d7, 0);
-	SET_GPIO(p->odroid_gpio->d6, 0);
-	SET_GPIO(p->odroid_gpio->d5, 0);
-	SET_GPIO(p->odroid_gpio->d4, 0);
+	write_gpio(p->odroid_gpio->d7, 0);
+	write_gpio(p->odroid_gpio->d6, 0);
+	write_gpio(p->odroid_gpio->d5, 0);
+	write_gpio(p->odroid_gpio->d4, 0);
 	p->hd44780_functions->uPause(p, 50);
 
-	SET_GPIO(p->odroid_gpio->d7, (ch & 0x08));
-	SET_GPIO(p->odroid_gpio->d6, (ch & 0x04));
-	SET_GPIO(p->odroid_gpio->d5, (ch & 0x02));
-	SET_GPIO(p->odroid_gpio->d4, (ch & 0x01));
+	write_gpio(p->odroid_gpio->d7, (ch & 0x08));
+	write_gpio(p->odroid_gpio->d6, (ch & 0x04));
+	write_gpio(p->odroid_gpio->d5, (ch & 0x02));
+	write_gpio(p->odroid_gpio->d4, (ch & 0x01));
 	p->hd44780_functions->uPause(p, 50);
 
-	SET_GPIO(p->odroid_gpio->en, 1);
+	write_gpio(p->odroid_gpio->en, 1);
 	p->hd44780_functions->uPause(p, 50);
 
-	SET_GPIO(p->odroid_gpio->en, 0);
+	write_gpio(p->odroid_gpio->en, 0);
 	p->hd44780_functions->uPause(p, 50);
 }
 
 
-/**
- * Turn display backlight on or off.
- * \param p      Pointer to driver's private data structure.
- * \param state  New backlight status.
- */
 void
-odroid_HD44780_backlight(PrivateData *p, unsigned char state)
+odroid_HD44780_output(PrivateData *p, int data)
 {
-    return;
+	write_gpio(p->odroid_gpio->led1, data & 1);
+	write_gpio(p->odroid_gpio->led2, data & 1 << 1);
+	write_gpio(p->odroid_gpio->led3, data & 1 << 2);
+	write_gpio(p->odroid_gpio->led4, data & 1 << 3);
+	write_gpio(p->odroid_gpio->led5, data & 1 << 4);
+	write_gpio(p->odroid_gpio->led6, data & 1 << 5);
+	write_gpio(p->odroid_gpio->led7, data & 1 << 6);
+}
+
+unsigned char
+odroid_HD44780_readkeypad(PrivateData *p, unsigned int Ydata)
+{
+	unsigned char out = 0x0;
+	if (Ydata == 0) {	// we have only direct connected keys
+		if (!read_gpio(p->odroid_gpio->btn1))
+			out |= 1;
+		if (!read_gpio(p->odroid_gpio->btn2))
+			out |= 2;
+		// emulate third button
+		if (out == 3)
+			out = 4;
+	}
+	return out;
 }

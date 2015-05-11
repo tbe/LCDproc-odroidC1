@@ -16,6 +16,15 @@ struct odroid_gpio_map {
 	int d6;
 	int d5;
 	int d4;
+	int led1;
+	int led2;
+	int led3;
+	int led4;
+	int led5;
+	int led6;
+	int led7;
+	int btn1;
+	int btn2;
 };
 
 /** Peripheral base address of the BCM2835 */
@@ -27,4 +36,4 @@ struct odroid_gpio_map {
 /** The ODRoid has 32 GPIO pins */
 #define GPIO_PINS               32
 
-#endif				// HD_LCDRPI_H
+#endif // HD_LCDRPI_H
